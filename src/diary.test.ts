@@ -21,6 +21,11 @@ describe('diario de intervenciones', () => {
   const waitForUi = async (): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, 0));
 
   beforeEach(async () => {
+    if (!HTMLDialogElement.prototype.showModal) {
+      HTMLDialogElement.prototype.showModal = function () {
+        this.open = true;
+      };
+    }
     repository = new MemoryRepository();
     document.body.innerHTML = '<div id="app"></div>';
     container = document.querySelector('#app')!;
