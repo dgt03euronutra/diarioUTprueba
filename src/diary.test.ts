@@ -10,7 +10,9 @@ class MemoryRepository implements RecordsRepository {
   }
 
   async saveRecord(record: UtRecord): Promise<void> {
-    this.records.push(structuredClone(record));
+    const index = this.records.findIndex((item) => item.id === record.id);
+    if (index < 0) this.records.push(structuredClone(record));
+    else this.records[index] = structuredClone(record);
   }
 
   async deleteRecord(id: string): Promise<void> {
@@ -102,6 +104,7 @@ describe('diario de intervenciones', () => {
     container.querySelector('[data-action="confirm-update"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await waitForUi();
 
+    expect(repository.records).toHaveLength(1);
     expect(repository.records[0].title).toBe('Título corregido');
     expect(repository.records[0].whatHappened).toBe('Descripción corregida');
     expect(container.querySelector('#detail-heading')?.textContent).toBe('Título corregido');
