@@ -12,6 +12,10 @@ class MemoryRepository implements RecordsRepository {
   async saveRecord(record: UtRecord): Promise<void> {
     this.records.push(structuredClone(record));
   }
+
+  async deleteRecord(id: string): Promise<void> {
+    this.records = this.records.filter((record) => record.id !== id);
+  }
 }
 
 describe('diario de intervenciones', () => {
@@ -71,6 +75,57 @@ describe('diario de intervenciones', () => {
     expect(container.querySelectorAll('.detail-content__section h3')[1].textContent).toBe('¿Cómo se ha solucionado?');
     expect(container.querySelector<HTMLDialogElement>('.dialog')?.open).toBe(true);
     container.querySelector('[data-action="close"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(container.querySelector('.dialog')).toBeNull();
+  });
+
+  it('edita un registro solo después de confirmar dos veces', async () => {
+    repository.records = [{
+      id: 'editable', date: '2026-10-05', utName: 'UT 5001', actionType: 'Mecánico',
+      title: 'Título original', whatHappened: 'Ocurrió algo', howResolved: 'Se reparó', createdAt: 1,
+    }];
+    initDiary(container, repository);
+    await waitForUi();
+    container.querySelector('[data-action="detail"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector('[data-action="edit"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const form = container.querySelector<HTMLFormElement>('.record-form')!;
+    expect(form.querySelector<HTMLInputElement>('[name="title"]')!.value).toBe('Título original');
+    form.querySelector<HTMLInputElement>('[name="title"]')!.value = 'Título corregido';
+    form.querySelector<HTMLTextAreaElement>('[name="whatHappened"]')!.value = 'Descripción corregida';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    expect(repository.records[0].title).toBe('Título original');
+    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 1 DE 2');
+    container.querySelector('[data-action="confirm-update"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(repository.records[0].title).toBe('Título original');
+    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 2 DE 2');
+    container.querySelector('[data-action="confirm-update"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+
+    expect(repository.records[0].title).toBe('Título corregido');
+    expect(repository.records[0].whatHappened).toBe('Descripción corregida');
+    expect(container.querySelector('#detail-heading')?.textContent).toBe('Título corregido');
+  });
+
+  it('elimina un registro solo después de confirmar dos veces', async () => {
+    repository.records = [{
+      id: 'deletable', date: '2026-10-05', utName: 'UT 5001', actionType: 'Mecánico',
+      title: 'Registro a eliminar', whatHappened: 'Incidencia', howResolved: 'Solución', createdAt: 1,
+    }];
+    initDiary(container, repository);
+    await waitForUi();
+    container.querySelector('[data-action="detail"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector('[data-action="delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(repository.records).toHaveLength(1);
+    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 1 DE 2');
+    container.querySelector('[data-action="confirm-delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(repository.records).toHaveLength(1);
+    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 2 DE 2');
+    container.querySelector('[data-action="confirm-delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+
+    expect(repository.records).toHaveLength(0);
     expect(container.querySelector('.dialog')).toBeNull();
   });
 

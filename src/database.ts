@@ -27,6 +27,17 @@ export class IndexedDbRecordsRepository implements RecordsRepository {
     });
   }
 
+  async deleteRecord(id: string): Promise<void> {
+    const database = await this.openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(RECORD_STORE, 'readwrite');
+      transaction.objectStore(RECORD_STORE).delete(id);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
+
   private openDatabase(): Promise<IDBDatabase> {
     if (!this.databasePromise) {
       this.databasePromise = new Promise((resolve, reject) => {

@@ -18,6 +18,7 @@ export interface UtRecord {
 export interface RecordsRepository {
   listRecords(): Promise<UtRecord[]>;
   saveRecord(record: UtRecord): Promise<void>;
+  deleteRecord(id: string): Promise<void>;
 }
 
 export function localDateString(date = new Date()): string {
