@@ -9,7 +9,9 @@ export interface UtRecord {
   utName: (typeof UT_NAMES)[number];
   actionType: ActionType;
   title: string;
-  content: string;
+  whatHappened: string;
+  howResolved: string;
+  content?: string;
   createdAt: number;
 }
 

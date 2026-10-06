@@ -75,17 +75,23 @@ export function initDiary(container: HTMLElement, repository: RecordsRepository 
             <label>Tipo de acción<select name="actionType" required><option value="" disabled selected>Selecciona un tipo</option>${ACTION_TYPES.map((type) => `<option>${type}</option>`).join('')}</select></label>
           </div>
           <label>Título<input name="title" type="text" maxlength="120" placeholder="Resumen de la intervención" required autocomplete="off"></label>
-          <label>Contenido<textarea name="content" rows="6" maxlength="5000" placeholder="Describe el trabajo realizado..." required></textarea></label>
+          <label>¿Qué ha ocurrido?<textarea name="whatHappened" rows="4" maxlength="5000" placeholder="Describe qué ha ocurrido..." required></textarea></label>
+          <label>¿Cómo se ha solucionado?<textarea name="howResolved" rows="4" maxlength="5000" placeholder="Describe cómo se ha solucionado..." required></textarea></label>
           <div class="dialog__actions"><button class="button button--quiet" type="button" data-action="close">Cancelar</button><button class="button button--primary" type="submit">Guardar registro <span aria-hidden="true">↗</span></button></div>
         </form>
       </dialog>`;
     } else if (activeDialog) {
+      const whatHappened = activeDialog.whatHappened ?? activeDialog.content ?? '';
+      const howResolved = activeDialog.howResolved ?? '';
       dialog = `<dialog class="dialog dialog--detail" aria-labelledby="detail-heading">
         <button class="dialog__close" type="button" data-action="close" aria-label="Cerrar">×</button>
         <p class="eyebrow">${escapeHtml(activeDialog.utName)} <span>·</span> ${escapeHtml(formatDate(activeDialog.date))}</p>
         <span class="action-tag action-tag--${ACTION_TYPES.indexOf(activeDialog.actionType)}">${escapeHtml(activeDialog.actionType)}</span>
         <h2 id="detail-heading">${escapeHtml(activeDialog.title)}</h2>
-        <textarea class="detail-content" readonly aria-label="Contenido del registro">${escapeHtml(activeDialog.content)}</textarea>
+        <div class="detail-content">
+          <section class="detail-content__section"><h3>¿Qué ha ocurrido?</h3><p>${escapeHtml(whatHappened) || 'Sin información registrada.'}</p></section>
+          <section class="detail-content__section"><h3>¿Cómo se ha solucionado?</h3><p>${escapeHtml(howResolved) || 'Sin información registrada.'}</p></section>
+        </div>
         <div class="dialog__actions"><button class="button button--primary" type="button" data-action="close">Cerrar</button></div>
       </dialog>`;
     }
@@ -165,7 +171,8 @@ export function initDiary(container: HTMLElement, repository: RecordsRepository 
       utName: String(formData.get('utName')) as UtRecord['utName'],
       actionType: String(formData.get('actionType')) as UtRecord['actionType'],
       title: String(formData.get('title')).trim(),
-      content: String(formData.get('content')).trim(),
+      whatHappened: String(formData.get('whatHappened')).trim(),
+      howResolved: String(formData.get('howResolved')).trim(),
       createdAt: Date.now(),
     };
     void repository.saveRecord(record).then(() => {
