@@ -15,9 +15,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,11 +36,6 @@ jobs:
       - name: Run tests
         run: npm test -- --run
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
       - name: Build app
         run: npm run build
 
@@ -53,6 +45,7 @@ jobs:
           path: dist
 
   deploy:
+    if: vars.ENABLE_GITHUB_PAGES == 'true'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -62,6 +55,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
