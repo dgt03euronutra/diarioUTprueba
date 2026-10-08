@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { initDiary } from './diary';
+import { UT_NAMES } from './models';
 import type { RecordsRepository, UtRecord } from './models';
 
 class MemoryRepository implements RecordsRepository {
   records: UtRecord[] = [];
+  units: string[] = [...UT_NAMES];
 
   async listRecords(): Promise<UtRecord[]> {
     return structuredClone(this.records);
@@ -17,6 +19,28 @@ class MemoryRepository implements RecordsRepository {
 
   async deleteRecord(id: string): Promise<void> {
     this.records = this.records.filter((record) => record.id !== id);
+  }
+
+  async listUTs(): Promise<string[]> {
+    return [...this.units];
+  }
+
+  async createUT(name: string): Promise<void> {
+    this.units.push(name);
+  }
+
+  async renameUT(currentName: string, newName: string): Promise<void> {
+    this.units = this.units.map((name) => name === currentName ? newName : name);
+    this.records = this.records.map((record) => record.utName === currentName
+      ? { ...record, utName: newName }
+      : record);
+  }
+
+  async deleteUT(name: string): Promise<number> {
+    const matching = this.records.filter((record) => record.utName === name);
+    this.records = this.records.filter((record) => record.utName !== name);
+    this.units = this.units.filter((unit) => unit !== name);
+    return matching.length;
   }
 }
 
@@ -43,7 +67,7 @@ describe('diario de intervenciones', () => {
     expect(container.querySelectorAll('.ut-section')).toHaveLength(6);
     expect(container.querySelectorAll('.record-list:not([hidden])')).toHaveLength(0);
     expect(container.querySelector('.ut-toggle__chevron')).toBeNull();
-    container.querySelector('[data-action="new"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector('[data-action="new-record"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     const form = container.querySelector<HTMLFormElement>('.record-form')!;
     expect(form.querySelector<HTMLInputElement>('[name="date"]')!.value).not.toBe('');
     form.querySelector<HTMLSelectElement>('[name="utName"]')!.value = 'UT 5001';
@@ -80,7 +104,7 @@ describe('diario de intervenciones', () => {
     expect(container.querySelector('.dialog')).toBeNull();
   });
 
-  it('edita un registro solo después de confirmar dos veces', async () => {
+  it('edita un registro tras una confirmación llamativa', async () => {
     repository.records = [{
       id: 'editable', date: '2026-10-05', utName: 'UT 5001', actionType: 'Mecánico',
       title: 'Título original', whatHappened: 'Ocurrió algo', howResolved: 'Se reparó', createdAt: 1,
@@ -88,7 +112,7 @@ describe('diario de intervenciones', () => {
     initDiary(container, repository);
     await waitForUi();
     container.querySelector('[data-action="detail"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    container.querySelector('[data-action="edit"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector('[data-action="edit-record"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     const form = container.querySelector<HTMLFormElement>('.record-form')!;
     expect(form.querySelector<HTMLInputElement>('[name="title"]')!.value).toBe('Título original');
@@ -97,11 +121,8 @@ describe('diario de intervenciones', () => {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
     expect(repository.records[0].title).toBe('Título original');
-    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 1 DE 2');
-    container.querySelector('[data-action="confirm-update"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(repository.records[0].title).toBe('Título original');
-    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 2 DE 2');
-    container.querySelector('[data-action="confirm-update"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(container.querySelector('.confirmation-mark')).toBeTruthy();
+    container.querySelector('[data-action="confirm-save"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await waitForUi();
 
     expect(repository.records).toHaveLength(1);
@@ -110,7 +131,7 @@ describe('diario de intervenciones', () => {
     expect(container.querySelector('#detail-heading')?.textContent).toBe('Título corregido');
   });
 
-  it('elimina un registro solo después de confirmar dos veces', async () => {
+  it('elimina un registro con una confirmación explícita', async () => {
     repository.records = [{
       id: 'deletable', date: '2026-10-05', utName: 'UT 5001', actionType: 'Mecánico',
       title: 'Registro a eliminar', whatHappened: 'Incidencia', howResolved: 'Solución', createdAt: 1,
@@ -118,18 +139,48 @@ describe('diario de intervenciones', () => {
     initDiary(container, repository);
     await waitForUi();
     container.querySelector('[data-action="detail"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    container.querySelector('[data-action="delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector('[data-action="delete-record"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     expect(repository.records).toHaveLength(1);
-    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 1 DE 2');
-    container.querySelector('[data-action="confirm-delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(repository.records).toHaveLength(1);
-    expect(container.querySelector('.eyebrow')?.textContent).toBe('CONFIRMACIÓN 2 DE 2');
+    expect(container.querySelector('.confirmation-mark')?.textContent).toBe('!');
     container.querySelector('[data-action="confirm-delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await waitForUi();
 
     expect(repository.records).toHaveLength(0);
     expect(container.querySelector('.dialog')).toBeNull();
+  });
+
+  it('crea, renombra y elimina UT conservando los registros al renombrar', async () => {
+    repository.records = [{
+      id: 'unit-record', date: '2026-10-05', utName: 'UT 5001', actionType: 'Mecánico',
+      title: 'Asociado a UT', whatHappened: 'Incidencia', howResolved: 'Reparado', createdAt: 1,
+    }];
+    initDiary(container, repository);
+    await waitForUi();
+
+    container.querySelector('[data-action="manage-units"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector('[data-action="new-unit"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector<HTMLInputElement>('[name="unitName"]')!.value = 'UT 6001';
+    container.querySelector<HTMLFormElement>('.unit-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await waitForUi();
+    expect(repository.units).toContain('UT 6001');
+
+    container.querySelector('[data-action="edit-unit"][data-ut="UT 5001"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    container.querySelector<HTMLInputElement>('[name="unitName"]')!.value = 'UT 5002';
+    container.querySelector<HTMLFormElement>('.unit-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    expect(repository.records[0].utName).toBe('UT 5001');
+    container.querySelector('[data-action="confirm-save"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+    expect(repository.units).toContain('UT 5002');
+    expect(repository.units).not.toContain('UT 5001');
+    expect(repository.records[0].utName).toBe('UT 5002');
+
+    container.querySelector('[data-action="delete-unit"][data-ut="UT 5002"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(repository.records).toHaveLength(1);
+    container.querySelector('[data-action="confirm-delete"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+    expect(repository.units).not.toContain('UT 5002');
+    expect(repository.records).toHaveLength(0);
   });
 
   it('pliega unidades y aplica el orden por tipo de acción a todas las UT', async () => {
@@ -143,11 +194,11 @@ describe('diario de intervenciones', () => {
     await waitForUi();
     expect(container.querySelectorAll('.list-heading [data-action="sort"]')).toHaveLength(2);
     expect(container.querySelector('.ut-section [data-action="sort"]')).toBeNull();
-    expect(container.querySelector('#records-UT-5001')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('.record-list[data-ut="UT 5001"]')?.hasAttribute('hidden')).toBe(true);
     container.querySelector('[data-action="toggle"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(container.querySelector('#records-UT-5001')?.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('.record-list[data-ut="UT 5001"]')?.hasAttribute('hidden')).toBe(false);
     container.querySelector('[data-action="toggle"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(container.querySelector('#records-UT-5001')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('.record-list[data-ut="UT 5001"]')?.hasAttribute('hidden')).toBe(true);
     const sortMenu = container.querySelector<HTMLDetailsElement>('.sort-menu')!;
     sortMenu.querySelector('summary')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     expect(sortMenu.open).toBe(true);
@@ -156,7 +207,7 @@ describe('diario de intervenciones', () => {
       .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     expect(sortMenu.open).toBe(false);
     expect(sortMenu.querySelector('.sort-menu__value')?.textContent).toBe('Tipo de acción');
-    expect(container.querySelector('#records-UT-5001 .record-row__title')?.textContent).toBe('B');
-    expect(container.querySelector('#records-UT-5101 .record-row__title')?.textContent).toBe('C');
+    expect(container.querySelector('.record-list[data-ut="UT 5001"] .record-row__title')?.textContent).toBe('B');
+    expect(container.querySelector('.record-list[data-ut="UT 5101"] .record-row__title')?.textContent).toBe('C');
   });
 });

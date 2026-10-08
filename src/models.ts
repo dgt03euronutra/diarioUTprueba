@@ -6,7 +6,7 @@ export type ActionType = (typeof ACTION_TYPES)[number];
 export interface UtRecord {
   id: string;
   date: string;
-  utName: (typeof UT_NAMES)[number];
+  utName: string;
   actionType: ActionType;
   title: string;
   whatHappened: string;
@@ -19,6 +19,10 @@ export interface RecordsRepository {
   listRecords(): Promise<UtRecord[]>;
   saveRecord(record: UtRecord): Promise<void>;
   deleteRecord(id: string): Promise<void>;
+  listUTs(): Promise<string[]>;
+  createUT(name: string): Promise<void>;
+  renameUT(currentName: string, newName: string): Promise<void>;
+  deleteUT(name: string): Promise<number>;
 }
 
 export function localDateString(date = new Date()): string {
